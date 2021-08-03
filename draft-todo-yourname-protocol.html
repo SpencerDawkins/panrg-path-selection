@@ -1,0 +1,1589 @@
+<!DOCTYPE html>
+<html lang="en" class="Internet-Draft">
+<head>
+<meta charset="utf-8">
+<meta content="Common,Latin" name="scripts">
+<meta content="initial-scale=1.0" name="viewport">
+<title>Generalized Multipath Path Selection</title>
+<meta content="Spencer Dawkins" name="author">
+<meta content="
+       In QUIC working group discussions about proposals to use multiple paths, an obvious question came up - given multiple paths, how does QUIC select paths to send packets over? 
+       The answer to that question may inform decisions in the QUIC working group about the scope of any multipath extensions considered for experimentation and adoption. 
+       This document is intended to summarize aspects of path selection from those contributions and conversations. 
+       It is recognized that path selection is not the only important open question about QUIC Multipath, but other open questions are out of scope for this document. 
+    " name="description">
+<meta content="xml2rfc 3.9.1" name="generator">
+<meta content="PAN" name="keyword">
+<meta content="draft-dawkins-panrg-multipath-selection-latest" name="ietf.draft">
+<!-- Generator version information:
+  xml2rfc 3.9.1
+    Python 3.9.5
+    appdirs 1.4.4
+    ConfigArgParse 1.3
+    google-i18n-address 2.5.0
+    html5lib 1.1
+    intervaltree 3.1.0
+    Jinja2 2.11.3
+    kitchen 1.2.6
+    lxml 4.6.3
+    pycountry 20.7.3
+    pyflakes 2.3.0
+    PyYAML 5.4.1
+    requests 2.25.1
+    setuptools 52.0.0
+    six 1.15.0
+-->
+<link href="draft-todo-yourname-protocol.xml" rel="alternate" type="application/rfc+xml">
+<link href="#copyright" rel="license">
+<style type="text/css">@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Lora';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Italic'), local('Lora-Italic'), url('https://martinthomson.github.io/rfc-css/fonts/lora-italic-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-cyrillic.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Lora Regular'), local('Lora-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/lora-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-cyrillic-ext.woff2') format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-cyrillic.woff2') format('woff2');
+  unicode-range: U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local('Lora Bold'), local('Lora-Bold'), url('https://martinthomson.github.io/rfc-css/fonts/lora-bold-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Cabin Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Cabin Condensed SemiBold'), local('CabinCondensed-SemiBold'), url('https://martinthomson.github.io/rfc-css/fonts/cabincondensed-semibold-vietnamese.woff2') format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+  font-family: 'Cabin Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Cabin Condensed SemiBold'), local('CabinCondensed-SemiBold'), url('https://martinthomson.github.io/rfc-css/fonts/cabincondensed-semibold-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Cabin Condensed';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local('Cabin Condensed SemiBold'), local('CabinCondensed-SemiBold'), url('https://martinthomson.github.io/rfc-css/fonts/cabincondensed-semibold-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Oxygen Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Oxygen Mono'), local('OxygenMono-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/oxygenmono-regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Oxygen Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local('Oxygen Mono'), local('OxygenMono-Regular'), url('https://martinthomson.github.io/rfc-css/fonts/oxygenmono-regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+html {
+  --background-color: #fff;
+  --text-color: #222;
+  --title-color: #191919;
+  --link-color: #2a6496;
+  --highlight-color: #f9f9f9;
+  --line-color: #eee;
+  --pilcrow-weak: #ddd;
+  --pilcrow-strong: #bbb;
+  --small-font-size: 14.5px;
+  scrollbar-color: #bbb #eee;
+}
+@media (prefers-color-scheme: dark) {
+html {
+  --background-color: #121212;
+  --text-color: #f0f0f0;
+  --title-color: #fff;
+  --link-color: #4da4f0;
+  --highlight-color: #282828;
+  --line-color: #444;
+  --pilcrow-weak: #444;
+  --pilcrow-strong: #666;
+  scrollbar-color: #777 #333;
+}
+}
+body {
+  max-width: 600px;
+  margin: 75px auto;
+  padding: 0 5px;
+  color: var(--text-color);
+  background-color: var(--background-color);
+  font: 16px/22px "Lora", serif;
+  scroll-behavior: smooth;
+}
+
+.ears {
+  display: none;
+}
+
+/* headings */
+#title, h1, h2, h3, h4, h5, h6 {
+  font-family: "Cabin Condensed", sans-serif;
+  font-weight: 600;
+  margin: 0.8em 0 0.3em;
+  font-size-adjust: 0.5;
+  color: var(--title-color);
+}
+#title {
+  font-size: 32px;
+  line-height: 40px;
+  clear: both;
+}
+#title, #rfcnum {
+  margin: 1.5em 0 0.2em;
+}
+#rfcnum + #title {
+  margin: 0.2em 0;
+}
+
+h1, h2, h3 {
+  font-size: 22px;
+  line-height: 27px;
+}
+h4, h5, h6 {
+  font-size: 20px;
+  line-height: 24px;
+}
+
+/* general structure */
+.author {
+  padding-bottom: 0.3em;
+}
+#abstract+p, #abstract+p code, #abstract+p samp, #abstract+p tt {
+  font-size: 18px;
+  line-height: 24px;
+}
+p {
+  padding: 0;
+  margin: 0.5em 0;
+  text-align: left;
+}
+div {
+  margin: 0;
+}
+.alignRight.art-text {
+  background-color: var(--highlight-color);
+  border: 1px solid var(--line-color);
+  border-radius: 3px;
+  padding: 0.5em 1em 0;
+  margin-bottom: 0.5em;
+}
+.alignRight.art-text pre {
+  padding: 0;
+  width: auto;
+}
+.alignRight {
+  margin: 1em 0;
+}
+.alignRight > *:first-child {
+  border: none;
+  margin: 0;
+  float: right;
+  clear: both;
+}
+.alignRight > *:nth-child(2) {
+  clear: both;
+  display: block;
+  border: none;
+}
+svg {
+  display: block;
+}
+.alignCenter.art-text {
+  background-color: var(--highlight-color);
+  border: 1px solid var(--line-color);
+  border-radius: 3px;
+  padding: 0.5em 1em 0;
+  margin-bottom: 0.5em;
+}
+.alignCenter.art-text pre {
+  padding: 0;
+  width: auto;
+}
+.alignCenter {
+  margin: 1em 0;
+}
+.alignCenter > *:first-child {
+  border: none;
+  /* this isn't optimal, but it's an existence proof.  PrinceXML doesn't
+     support flexbox yet.
+  */
+  display: table;
+  margin: 0 auto;
+}
+
+/* lists */
+ol, ul {
+  padding: 0;
+  margin: 0 0 0.5em 2em;
+}
+ol ol, ul ul, ol ul, ul ol {
+  margin-left: 1em;
+}
+li {
+  margin: 0 0 0.25em 0;
+}
+.ulCompact li {
+  margin: 0;
+}
+ul.empty, .ulEmpty {
+  list-style-type: none;
+}
+ul.empty li, .ulEmpty li {
+  margin-top: 0.5em;
+}
+ul.compact, .ulCompact,
+ol.compact, .olCompact {
+  line-height: 100%;
+  margin: 0 0 0 2em;
+}
+
+/* definition lists */
+dl {
+}
+dl > dt {
+  float: left;
+  margin-right: 1em;
+}
+dl > dd {
+  margin-bottom: .8em;
+  min-height: 1.3em;
+}
+dl.compact > dd, .dlCompact > dd {
+  margin-bottom: 0em;
+}
+dl > dd > dl {
+  margin-top: 0.5em;
+  margin-bottom: 0em;
+}
+dd.break {
+  display: none;
+}
+
+/* links */
+a, a[href].selfRef:hover {
+  text-decoration: none;
+}
+a[href].selfRef {
+  color: var(--text-color);
+}
+a[href] {
+  color: var(--link-color);
+}
+a[href]:hover {
+  text-decoration: underline;
+}
+a[href].selfRef:hover {
+  background-color: var(--highlight-color);
+}
+a.xref {
+  white-space: nowrap;
+}
+
+/* Figures */
+tt, code, pre {
+  background-color: var(--highlight-color);
+  font: 14px/22px 'Oxygen Mono', monospace;
+}
+pre {
+  border: 1px solid var(--line-color);
+  font-size: 13.5px;
+  line-height: 16px;
+  letter-spacing: -0.2px;
+  margin: 5px;
+  padding: 5px;
+}
+img {
+  max-width: 100%;
+}
+figure {
+  margin: 0.5em 0;
+  padding: 0;
+}
+figure blockquote {
+  margin: 0.8em 0.4em 0.4em;
+}
+figcaption, caption {
+  font-style: italic;
+  margin: 0.5em 1.5em;
+  text-align: left;
+}
+@media screen {
+  pre {
+    display: inline-block;
+    overflow-x: auto;
+    max-width: 100%;
+    width: calc(100% - 22px - 1em);
+  }
+  figure pre {
+    display: block;
+    width: calc(100% - 25px);
+  }
+  pre + .pilcrow {
+    display: inline-block;
+    vertical-align: text-bottom;
+    padding-bottom: 8px;
+  }
+}
+
+/* aside, blockquote */
+aside, blockquote {
+  margin-left: 0;
+  padding: 0 2em;
+  font-style: italic;
+}
+blockquote {
+  background-color: var(--highlight-color);
+  border: 1px solid var(--line-color);
+  border-radius: 3px;
+  margin: 1em 0;
+}
+cite {
+  display: block;
+  text-align: right;
+  font-style: italic;
+}
+
+/* tables */
+table {
+  max-width: 100%;
+  margin: 0 0 1em;
+  border-collapse: collapse;
+}
+table.right {
+  margin-left: auto;
+}
+table.center {
+  margin-left: auto;
+  margin-right: auto;
+}
+table.left {
+  margin-right: auto;
+}
+thead, tbody {
+  border: 1px solid var(--line-color);
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 5px 10px;
+}
+th {
+  background-color: var(--line-color);
+}
+tr:nth-child(2n) > td {
+  background-color: var(--background-color);
+}
+tr:nth-child(2n+1) > td {
+  background-color: var(--highlight-color);
+}
+thead+tbody > tr:nth-child(2n) > td {
+  background-color: var(--highlight-color);
+}
+thead+tbody > tr:nth-child(2n+1) > td {
+  background-color: var(--background-color);
+}
+table caption {
+  margin: 0;
+  padding: 3px 0 3px 1em;
+}
+table p {
+  margin: 0;
+}
+
+/* pilcrow */
+a.pilcrow {
+  margin-left: 3px;
+  opacity: 0.2;
+  user-select: none;
+}
+a.pilcrow[href] { color: var(--pilcrow-weak); }
+a.pilcrow[href]:hover { text-decoration: none; }
+@media not print {
+  :hover > a.pilcrow {
+    opacity: 1;
+  }
+  a.pilcrow[href]:hover {
+    color: var(--pilcrow-strong);
+    background-color: transparent;
+  }
+}
+@media print {
+  a.pilcrow {
+    display: none;
+  }
+}
+
+/* misc */
+hr {
+  border: 0;
+  border-top: 1px solid var(--line-color);
+}
+.bcp14 {
+  font-variant: small-caps;
+}
+
+.role {
+  font-variant: all-small-caps;
+}
+
+/* info block */
+#identifiers {
+  margin: 0;
+  font-size: var(--small-font-size);
+  line-height: 18px;
+  --identifier-width: 8em;
+}
+#identifiers dt {
+  width: var(--identifier-width);
+  margin: 0;
+  clear: left;
+  float: left;
+  text-align: right;
+}
+#identifiers dd {
+  margin: 0 0 0 calc(1em + var(--identifier-width));
+  min-width: 5em;
+}
+#identifiers .authors .author {
+  display: inline-block;
+  margin-right: 1.5em;
+}
+#identifiers .authors .org {
+  font-style: italic;
+}
+
+/* The prepared/rendered info at the very bottom of the page */
+.docInfo {
+  color: #999;
+  font-size: 0.9em;
+  font-style: italic;
+  margin-top: 2em;
+}
+.docInfo .prepared {
+  float: left;
+}
+.docInfo .prepared {
+  float: right;
+}
+
+/* table of contents */
+#toc {
+  padding: 0.75em 0 2em 0;
+  margin-bottom: 1em;
+}
+#toc nav ul {
+  margin: 0 0.5em 0 0;
+  padding: 0;
+  list-style: none;
+}
+#toc nav li {
+  line-height: 1.3em;
+  margin: 0.75em 0;
+  padding-left: 1.2em;
+  text-indent: -1.2em;
+}
+#toc a.xref {
+  white-space: normal;
+}
+/* references */
+.references dt {
+  text-align: right;
+  font-weight: bold;
+  min-width: 7em;
+}
+.references dd {
+  margin-left: 8em;
+  overflow: auto;
+}
+
+.refInstance {
+  margin-bottom: 1.25em;
+}
+
+.references .ascii {
+  margin-bottom: 0.25em;
+}
+
+/* index */
+.index ul {
+  margin: 0 0 0 1em;
+  padding: 0;
+  list-style: none;
+}
+.index ul ul {
+  margin: 0;
+}
+.index li {
+  margin: 0;
+  text-indent: -2em;
+  padding-left: 2em;
+  padding-bottom: 5px;
+}
+.indexIndex {
+  margin: 0.5em 0 1em;
+}
+.index a {
+  font-weight: 700;
+}
+/* make the index two-column on all but the smallest screens */
+@media (min-width: 500px) {
+  .index ul {
+    column-count: 2;
+    column-gap: 20px;
+  }
+  .index ul ul {
+    column-count: 1;
+    column-gap: 0;
+  }
+}
+
+/* authors */
+address.vcard {
+  font-style: normal;
+  margin: 1em 0;
+}
+address.vcard .nameRole {
+  font-weight: 700;
+  margin-left: 0;
+}
+address.vcard .label {
+  margin: 0.5em 0;
+}
+address.vcard .type {
+  display: none;
+}
+.alternative-contact {
+  margin: 1.5em 0 1em;
+}
+hr.addr {
+  border-top: 1px dashed;
+  margin: 0;
+  color: #ddd;
+  max-width: calc(100% - 16px);
+}
+@media (min-width: 500px) {
+  #authors-addresses > section {
+    column-count: 2;
+    column-gap: 20px;
+  }
+  #authors-addresses > section > h2 {
+    column-span: all;
+  }
+  /* hack for break-inside: avoid-column */
+  #authors-addresses address {
+    display: inline-block;
+    break-inside: avoid-column;
+  }
+}
+
+.rfcEditorRemove p:first-of-type {
+  font-style: italic;
+}
+.cref {
+  background-color: rgba(249, 232, 105, 0.3);
+  padding: 2px 4px;
+}
+.crefSource {
+  font-style: italic;
+}
+/* alternative layout for smaller screens */
+@media screen and (max-width: 929px) {
+  #toc {
+    position: fixed;
+    z-index: 2;
+    top: 0;
+    right: 0;
+    padding: 0;
+    margin: 0;
+    border-bottom: 1px solid #ccc;
+    opacity: 0.6;
+  }
+  #toc.active {
+      opacity: 1;
+  }
+  #toc h2 {
+    margin: 0;
+    padding: 2px 0 2px 6px;
+    padding-right: 1em;
+    font-size: 18px;
+    line-height: 24px;
+    min-width: 190px;
+    text-align: right;
+    background-color: #444;
+    color: white;
+    cursor: pointer;
+  }
+  #toc h2::before { /* css hamburger */
+    float: right;
+    position: relative;
+    width: 1em;
+    height: 1px;
+    left: -164px;
+    margin: 8px 0 0 0;
+    background: white none repeat scroll 0 0;
+    box-shadow: 0 4px 0 0 white, 0 8px 0 0 white;
+    content: "";
+  }
+  #toc nav {
+    display: none;
+    background-color: var(--background-color);
+    padding: 0.5em 1em 1em;
+    overflow: auto;
+    overscroll-behavior: contain;
+    height: calc(100vh - 48px);
+    border-left: 1px solid #ddd;
+  }
+  #toc.active nav {
+    display: block;
+  }
+  /* Make the collapsed ToC header render white on gray also when it's a link */
+  #toc h2 a,
+  #toc h2 a:link,
+  #toc h2 a:focus,
+  #toc h2 a:hover,
+  #toc a.toplink,
+  #toc a.toplink:hover {
+    color: white;
+    background-color: #444;
+    text-decoration: none;
+  }
+  #toc a.toplink {
+    margin-top: 2px;
+  }
+}
+
+/* alternative layout for wide screens */
+@media screen and (min-width: 930px) {
+  body {
+    padding-right: 360px;
+    padding-right: calc(min(180px + 20%, 500px));
+  }
+  #toc {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    right: calc(50vw - 480px);
+    width: 312px;
+    margin: 0;
+    padding: 0;
+    z-index: 1;
+  }
+  #toc h2 {
+    margin: 0;
+    padding: 0.25em 1em 1em 0;
+  }
+  #toc nav {
+    display: block;
+    height: calc(90vh - 84px);
+    bottom: 0;
+    padding: 0.5em 0 2em;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  #toc nav > ul  {
+    margin-bottom: 2em;
+  }
+  #toc ul {
+    margin: 0 0 0 4px;
+    font-size: var(--small-font-size);
+  }
+  #toc ul p, #toc ul li {
+    margin: 2px 0;
+    line-height: 22px;
+  }
+  img { /* future proofing */
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* pagination */
+@media print {
+  body {
+    width: 100%;
+  }
+  p {
+    orphans: 3;
+    widows: 3;
+  }
+  #n-copyright-notice {
+    border-bottom: none;
+  }
+  #toc, #n-introduction {
+    page-break-before: always;
+  }
+  #toc {
+    border-top: none;
+    padding-top: 0;
+  }
+  figure, pre {
+    page-break-inside: avoid;
+  }
+  figure {
+    overflow: scroll;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+  }
+  h2+*, h3+*, h4+*, h5+*, h6+* {
+    page-break-before: avoid;
+  }
+  pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 10pt;
+  }
+  table {
+    border: 1px solid #ddd;
+  }
+  td {
+    border-top: 1px solid #ddd;
+  }
+}
+
+@page :first {
+  padding-top: 0;
+  @top-left {
+    content: normal;
+    border: none;
+  }
+  @top-center {
+    content: normal;
+    border: none;
+  }
+  @top-right {
+    content: normal;
+    border: none;
+  }
+}
+
+@page {
+  size: A4;
+  margin-bottom: 45mm;
+  padding-top: 20px;
+}
+
+/* Changes introduced to fix issues found during implementation */
+
+/* Separate body from document info even without intervening H1 */
+section {
+  clear: both;
+}
+
+/* Top align author divs, to avoid names without organization dropping level with org names */
+.author {
+  vertical-align: top;
+}
+
+/* Style section numbers with more space between number and title */
+.section-number {
+  padding-right: 0.5em;
+}
+
+/* Add styling for a link in the ToC that points to the top of the document */
+a.toplink {
+  float: right;
+  margin: 8px 0.5em 0;
+}
+
+/* Fix the dl styling to match the RFC 7992 attributes */
+dl > dt,
+dl.dlParallel > dt {
+  float: left;
+  margin-right: 1em;
+}
+dl.dlNewline > dt {
+  float: none;
+}
+
+/* Provide styling for table cell text alignment */
+table .text-left, table .text-left {
+  text-align: left;
+}
+table .text-center, table .text-center {
+  text-align: center;
+}
+table .text-right, table .text-right {
+  text-align: right;
+}
+
+/* Make the alternative author contact information look less like just another
+   author, and group it closer with the primary author contact information */
+.alternative-contact {
+  margin: 0.5em 0 0.25em 0;
+}
+address .non-ascii {
+  margin: 0 0 0 2em;
+}
+
+/* With it being possible to set tables with alignment
+  left, center, and right, { width: 100%; } does not make sense */
+table {
+  width: auto;
+}
+
+/* Avoid reference text that sits in a block with very wide left margin,
+   because of a long floating dt label.*/
+.references dd {
+  overflow: visible;
+}
+
+/* Control caption placement */
+caption {
+  caption-side: bottom;
+}
+
+/* Limit the width of the author address vcard, so names in right-to-left
+   script don't end up on the other side of the page. */
+
+address.vcard {
+  max-width: 20em;
+  margin-right: auto;
+}
+
+/* For address alignment dependent on LTR or RTL scripts */
+address div.left {
+  text-align: left;
+}
+address div.right {
+  text-align: right;
+}
+
+/* Give the table caption label the same styling as the figcaption */
+
+@media print {
+  .toplink {
+    display: none;
+  }
+
+  /* avoid overwriting the top border line with the ToC header */
+  #toc {
+    padding-top: 1px;
+  }
+
+  /* Avoid page breaks inside dl and author address entries */
+  dd {
+    page-break-before: avoid;
+  }
+  .vcard {
+    page-break-inside: avoid;
+  }
+
+}
+/* Tweak the bcp14 keyword presentation */
+.bcp14 {
+  font-variant: small-caps;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+</style>
+
+</head>
+<body>
+<table class="ears">
+<thead><tr>
+<td class="left">Internet-Draft</td>
+<td class="center">Multipath Path Selection</td>
+<td class="right">August 2021</td>
+</tr></thead>
+<tfoot><tr>
+<td class="left">Dawkins</td>
+<td class="center">Expires 4 February 2022</td>
+<td class="right">[Page]</td>
+</tr></tfoot>
+</table>
+<div id="external-metadata" class="document-information"></div>
+<div id="internal-metadata" class="document-information">
+<dl id="identifiers">
+<dt class="label-workgroup">Workgroup:</dt>
+<dd class="workgroup">PANRG Research Group</dd>
+<dt class="label-internet-draft">Internet-Draft:</dt>
+<dd class="internet-draft">draft-dawkins-panrg-multipath-selection-latest</dd>
+<dt class="label-published">Published:</dt>
+<dd class="published">
+<time datetime="2021-08-03" class="published">3 August 2021</time>
+    </dd>
+<dt class="label-intended-status">Intended Status:</dt>
+<dd class="intended-status">Informational</dd>
+<dt class="label-expires">Expires:</dt>
+<dd class="expires"><time datetime="2022-02-04">4 February 2022</time></dd>
+<dt class="label-authors">Author:</dt>
+<dd class="authors">
+<div class="author">
+      <div class="author-name">S. Dawkins</div>
+<div class="org">Tencent America LLC</div>
+</div>
+</dd>
+</dl>
+</div>
+<h1 id="title">Generalized Multipath Path Selection</h1>
+<section id="section-abstract">
+      <h2 id="abstract"><a href="#abstract" class="selfRef">Abstract</a></h2>
+<p id="section-abstract-1">In QUIC working group discussions about proposals to use multiple paths, an obvious question came up - given multiple paths, how does QUIC select paths to send packets over?<a href="#section-abstract-1" class="pilcrow">¶</a></p>
+<p id="section-abstract-2">The answer to that question may inform decisions in the QUIC working group about the scope of any multipath extensions considered for experimentation and adoption.<a href="#section-abstract-2" class="pilcrow">¶</a></p>
+<p id="section-abstract-3">This document is intended to summarize aspects of path selection from those contributions and conversations.<a href="#section-abstract-3" class="pilcrow">¶</a></p>
+<p id="section-abstract-4">It is recognized that path selection is not the only important open question about QUIC Multipath, but other open questions are out of scope for this document.<a href="#section-abstract-4" class="pilcrow">¶</a></p>
+</section>
+<div id="status-of-memo">
+<section id="section-boilerplate.1">
+        <h2 id="name-status-of-this-memo">
+<a href="#name-status-of-this-memo" class="section-name selfRef">Status of This Memo</a>
+        </h2>
+<p id="section-boilerplate.1-1">
+        This Internet-Draft is submitted in full conformance with the
+        provisions of BCP 78 and BCP 79.<a href="#section-boilerplate.1-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-2">
+        Internet-Drafts are working documents of the Internet Engineering Task
+        Force (IETF). Note that other groups may also distribute working
+        documents as Internet-Drafts. The list of current Internet-Drafts is
+        at <span><a href="https://datatracker.ietf.org/drafts/current/">https://datatracker.ietf.org/drafts/current/</a></span>.<a href="#section-boilerplate.1-2" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-3">
+        Internet-Drafts are draft documents valid for a maximum of six months
+        and may be updated, replaced, or obsoleted by other documents at any
+        time. It is inappropriate to use Internet-Drafts as reference
+        material or to cite them other than as "work in progress."<a href="#section-boilerplate.1-3" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-4">
+        This Internet-Draft will expire on 4 February 2022.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="copyright">
+<section id="section-boilerplate.2">
+        <h2 id="name-copyright-notice">
+<a href="#name-copyright-notice" class="section-name selfRef">Copyright Notice</a>
+        </h2>
+<p id="section-boilerplate.2-1">
+            Copyright (c) 2021 IETF Trust and the persons identified as the
+            document authors. All rights reserved.<a href="#section-boilerplate.2-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.2-2">
+            This document is subject to BCP 78 and the IETF Trust's Legal
+            Provisions Relating to IETF Documents
+            (<span><a href="https://trustee.ietf.org/license-info">https://trustee.ietf.org/license-info</a></span>) in effect on the date of
+            publication of this document. Please review these documents
+            carefully, as they describe your rights and restrictions with
+            respect to this document.<a href="#section-boilerplate.2-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="toc">
+<section id="section-toc.1">
+        <a href="#" onclick="scroll(0,0)" class="toplink">▲</a><h2 id="name-table-of-contents">
+<a href="#name-table-of-contents" class="section-name selfRef">Table of Contents</a>
+        </h2>
+<nav class="toc"><ul class="ulBare toc ulEmpty compact">
+<li class="ulBare toc ulEmpty compact" id="section-toc.1-1.1">
+            <p id="section-toc.1-1.1.1"><a href="#section-1" class="xref">1</a>.  <a href="#name-introduction" class="xref">Introduction</a></p>
+<ul class="ulBare toc compact ulEmpty">
+<li class="ulBare toc compact ulEmpty" id="section-toc.1-1.1.2.1">
+                <p id="section-toc.1-1.1.2.1.1" class="keepWithNext"><a href="#section-1.1" class="xref">1.1</a>.  <a href="#name-why-we-should-look-at-path-" class="xref">Why We Should Look at Path Selection Strategies Now</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.1.2.2">
+                <p id="section-toc.1-1.1.2.2.1" class="keepWithNext"><a href="#section-1.2" class="xref">1.2</a>.  <a href="#name-notes-for-readers" class="xref">Notes for Readers</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.1.2.3">
+                <p id="section-toc.1-1.1.2.3.1" class="keepWithNext"><a href="#section-1.3" class="xref">1.3</a>.  <a href="#name-minimal-terminology" class="xref">Minimal Terminology</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.1.2.4">
+                <p id="section-toc.1-1.1.2.4.1"><a href="#section-1.4" class="xref">1.4</a>.  <a href="#name-contribution-and-discussion" class="xref">Contribution and Discussion Venues for this draft.</a></p>
+</li>
+            </ul>
+</li>
+          <li class="ulBare toc ulEmpty compact" id="section-toc.1-1.2">
+            <p id="section-toc.1-1.2.1"><a href="#section-2" class="xref">2</a>.  <a href="#name-background-for-this-documen" class="xref">Background for this document</a></p>
+</li>
+          <li class="ulBare toc ulEmpty compact" id="section-toc.1-1.3">
+            <p id="section-toc.1-1.3.1"><a href="#section-3" class="xref">3</a>.  <a href="#name-overview-of-proposed-path-s" class="xref">Overview of Proposed Path Selection Strategies</a></p>
+<ul class="ulBare toc compact ulEmpty">
+<li class="ulBare toc compact ulEmpty" id="section-toc.1-1.3.2.1">
+                <p id="section-toc.1-1.3.2.1.1"><a href="#section-3.1" class="xref">3.1</a>.  <a href="#name-active-standby" class="xref">Active-Standby</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.3.2.2">
+                <p id="section-toc.1-1.3.2.2.1"><a href="#section-3.2" class="xref">3.2</a>.  <a href="#name-latency-versus-bandwidth" class="xref">Latency Versus Bandwidth</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.3.2.3">
+                <p id="section-toc.1-1.3.2.3.1"><a href="#section-3.3" class="xref">3.3</a>.  <a href="#name-bandwidth-aggregation-load-" class="xref">Bandwidth Aggregation/Load Balancing</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.3.2.4">
+                <p id="section-toc.1-1.3.2.4.1"><a href="#section-3.4" class="xref">3.4</a>.  <a href="#name-minimum-rtt-difference" class="xref">Minimum RTT Difference</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.3.2.5">
+                <p id="section-toc.1-1.3.2.5.1"><a href="#section-3.5" class="xref">3.5</a>.  <a href="#name-round-trip-time-thresholds" class="xref">Round-Trip-Time Thresholds</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.3.2.6">
+                <p id="section-toc.1-1.3.2.6.1"><a href="#section-3.6" class="xref">3.6</a>.  <a href="#name-rtt-equivalence" class="xref">RTT Equivalence</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.3.2.7">
+                <p id="section-toc.1-1.3.2.7.1"><a href="#section-3.7" class="xref">3.7</a>.  <a href="#name-priority-based" class="xref">Priority-based</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.3.2.8">
+                <p id="section-toc.1-1.3.2.8.1"><a href="#section-3.8" class="xref">3.8</a>.  <a href="#name-redundant" class="xref">Redundant</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.3.2.9">
+                <p id="section-toc.1-1.3.2.9.1"><a href="#section-3.9" class="xref">3.9</a>.  <a href="#name-control-plane-versus-data-p" class="xref">Control Plane Versus Data Plane</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.3.2.10">
+                <p id="section-toc.1-1.3.2.10.1"><a href="#section-3.10" class="xref">3.10</a>. <a href="#name-combinations-of-strategies" class="xref">Combinations of Strategies</a></p>
+</li>
+            </ul>
+</li>
+          <li class="ulBare toc ulEmpty compact" id="section-toc.1-1.4">
+            <p id="section-toc.1-1.4.1"><a href="#section-4" class="xref">4</a>.  <a href="#name-implications-for-quic-multi" class="xref">Implications for QUIC Multipath</a></p>
+<ul class="ulBare toc compact ulEmpty">
+<li class="ulBare toc compact ulEmpty" id="section-toc.1-1.4.2.1">
+                <p id="section-toc.1-1.4.2.1.1"><a href="#section-4.1" class="xref">4.1</a>.  <a href="#name-selecting-a-single-path-amo" class="xref">Selecting a Single Path Among Multiple Validated Paths ("Traffic Switching")</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.4.2.2">
+                <p id="section-toc.1-1.4.2.2.1"><a href="#section-4.2" class="xref">4.2</a>.  <a href="#name-selecting-multiple-active-p" class="xref">Selecting Multiple Active Paths ("Traffic Splitting")</a></p>
+</li>
+              <li class="ulBare toc compact ulEmpty" id="section-toc.1-1.4.2.3">
+                <p id="section-toc.1-1.4.2.3.1"><a href="#section-4.3" class="xref">4.3</a>.  <a href="#name-arbitrary-combinations" class="xref">Arbitrary Combinations</a></p>
+</li>
+            </ul>
+</li>
+          <li class="ulBare toc ulEmpty compact" id="section-toc.1-1.5">
+            <p id="section-toc.1-1.5.1"><a href="#section-5" class="xref">5</a>.  <a href="#name-next-steps" class="xref">Next Steps</a></p>
+</li>
+          <li class="ulBare toc ulEmpty compact" id="section-toc.1-1.6">
+            <p id="section-toc.1-1.6.1"><a href="#section-6" class="xref">6</a>.  <a href="#name-iana-considerations" class="xref">IANA Considerations</a></p>
+</li>
+          <li class="ulBare toc ulEmpty compact" id="section-toc.1-1.7">
+            <p id="section-toc.1-1.7.1"><a href="#section-7" class="xref">7</a>.  <a href="#name-security-considerations" class="xref">Security Considerations</a></p>
+</li>
+          <li class="ulBare toc ulEmpty compact" id="section-toc.1-1.8">
+            <p id="section-toc.1-1.8.1"><a href="#section-8" class="xref"></a><a href="#name-acknowledgments" class="xref">Acknowledgments</a></p>
+</li>
+          <li class="ulBare toc ulEmpty compact" id="section-toc.1-1.9">
+            <p id="section-toc.1-1.9.1"><a href="#section-9" class="xref"></a><a href="#name-informative-references" class="xref">Informative References</a></p>
+</li>
+          <li class="ulBare toc ulEmpty compact" id="section-toc.1-1.10">
+            <p id="section-toc.1-1.10.1"><a href="#appendix-A" class="xref"></a><a href="#name-authors-address" class="xref">Author's Address</a></p>
+</li>
+        </ul>
+</nav>
+</section>
+</div>
+<div id="intro">
+<section id="section-1">
+      <h2 id="name-introduction">
+<a href="#section-1" class="section-number selfRef">1. </a><a href="#name-introduction" class="section-name selfRef">Introduction</a>
+      </h2>
+<p id="section-1-1">In QUIC working group <span>[<a href="#QUIC-charter" class="xref">QUIC-charter</a>]</span> discussions about proposals to use multiple paths, an obvious question came up - given multiple paths, how does QUIC select paths to send packets over?<a href="#section-1-1" class="pilcrow">¶</a></p>
+<p id="section-1-2">The answer to that question may inform decisions in the QUIC working group about the scope of any multipath extensions considered for experimentation and adoption.<a href="#section-1-2" class="pilcrow">¶</a></p>
+<p id="section-1-3">This document is intended to summarize aspects of path selection from those contributions and conversations.<a href="#section-1-3" class="pilcrow">¶</a></p>
+<p id="section-1-4">It is recognized that path selection is not the only important open question about QUIC Multipath, but other open questions are out of scope for this document.<a href="#section-1-4" class="pilcrow">¶</a></p>
+<div id="atsss">
+<section id="section-1.1">
+        <h3 id="name-why-we-should-look-at-path-">
+<a href="#section-1.1" class="section-number selfRef">1.1. </a><a href="#name-why-we-should-look-at-path-" class="section-name selfRef">Why We Should Look at Path Selection Strategies Now</a>
+        </h3>
+<p id="section-1.1-1">One of the first questions that's come up in discussions about multiple paths for QUIC has been about path selection. As soon as an implementation has multiple paths available, it must decide how to use these paths. The <span>[<a href="#RFC9000" class="xref">RFC9000</a>]</span> answer, relying on connection migration, is "if you have multiple paths available, you can validate more than one connection at a time, but you only send on one connection at a time, and you migrate to another connection when you decide sending on the current connection is no longer appropriate. How you decide to migrate to another connection is up to you".<a href="#section-1.1-1" class="pilcrow">¶</a></p>
+<p id="section-1.1-2">That has been a fine answer for many of the implementers who have worked on the first version of QUIC, and have deployed it in their networks. For other implementers, targeting other use cases and other networking environments, it may not be sufficient.<a href="#section-1.1-2" class="pilcrow">¶</a></p>
+<p id="section-1.1-3">To take only one example, one of several presentations at <span>[<a href="#QUIC-interim-20-10" class="xref">QUIC-interim-20-10</a>]</span> described aspects of 3GPP Access Traffic Steering, Switch and Splitting support (ATSSS), which contained four "Steering Modes" as part of Rel-16 in 2019 <span>[<a href="#TS23501" class="xref">TS23501</a>]</span>, each of which corresponding roughly to a path selection strategy described in <a href="#strategies" class="xref">Section 3</a> of this document. A study on "ATSSS Phase 2" <span>[<a href="#TR23700-93" class="xref">TR23700-93</a>]</span> included four more Steering Modes for Rel-17, expected to be finalized in mid-2021, and none of these eight (so far) Steering Modes are based on QUIC - they are based on Multipath TCP (<span>[<a href="#RFC8684" class="xref">RFC8684</a>]</span> or simple IP packet forwarding. And if that were not enough, a proposal for a study on "ATSSS Phase 3" <span>[<a href="#S2-2104599" class="xref">S2-2104599</a>]</span> was provided to the SA2 145-e meeting in May 2021. Some of the ATSSS strategies rely in 5G network internals and don't translate to the broader Internet, but most do translate, and 3GPP participants certainly aren't the only people thinking about path selection strategies.<a href="#section-1.1-3" class="pilcrow">¶</a></p>
+<p id="section-1.1-4">Since the various proposals presented at <span>[<a href="#QUIC-interim-20-10" class="xref">QUIC-interim-20-10</a>]</span> were developed in isolation from each other, the path selection strategies that they reflect may be similar between proposals, but not quite the same, and none of the proposals presented had more than two strategies in common with any other proposal.<a href="#section-1.1-4" class="pilcrow">¶</a></p>
+<p id="section-1.1-5">Given the number of path selection strategies being considered, implemented, and even deployed in any number of venues, and the potential for combinatorial explosion as described in <a href="#combo" class="xref">Section 3.10</a>, it seems that identifying common aspects of path selection strategies, sooner rather than later, is important.<a href="#section-1.1-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="readernotes">
+<section id="section-1.2">
+        <h3 id="name-notes-for-readers">
+<a href="#section-1.2" class="section-number selfRef">1.2. </a><a href="#name-notes-for-readers" class="section-name selfRef">Notes for Readers</a>
+        </h3>
+<p id="section-1.2-1">This document is an informational Internet-Draft, not adopted by any IETF working group, and does not carry any special status within the IETF.<a href="#section-1.2-1" class="pilcrow">¶</a></p>
+<p id="section-1.2-2">Please note well that this document reflects the author's current understanding of past working group discussions and proposals.  Contributions that add or improve considerations are welcomed, as described in <a href="#contrib" class="xref">Section 1.4</a>.<a href="#section-1.2-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="min-term">
+<section id="section-1.3">
+        <h3 id="name-minimal-terminology">
+<a href="#section-1.3" class="section-number selfRef">1.3. </a><a href="#name-minimal-terminology" class="section-name selfRef">Minimal Terminology</a>
+        </h3>
+<p id="section-1.3-1">In this document, "QUIC multipath" is only used as shorthand for "QUIC using multiple paths". It does not refer to a specific proposal.<a href="#section-1.3-1" class="pilcrow">¶</a></p>
+<p id="section-1.3-2">In this document, "path selection strategy" means the policy that a QUIC sender uses to guide its choice between multiple interfaces of a QUIC connection for "the next packet".<a href="#section-1.3-2" class="pilcrow">¶</a></p>
+<p id="section-1.3-3">This document adopts three terms, stolen from <span>[<a href="#TS23501" class="xref">TS23501</a>]</span>, that seemed helpful in previous discussions about multipath in the QUIC working group.<a href="#section-1.3-3" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-1.3-4.1">Traffic Steering - selecting an initial path (in <span>[<a href="#RFC9000" class="xref">RFC9000</a>]</span>, this would be "validating a connection, and then using it". Although an <span>[<a href="#RFC9000" class="xref">RFC9000</a>]</span> client can validate multiple connections, the client will only use one validated connection at a time.<a href="#section-1.3-4.1" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-1.3-4.2">Traffic Switching - selecting a different validated path (in <span>[<a href="#RFC9000" class="xref">RFC9000</a>]</span>, this is something like "migrating to a new validated connection", although whether connection migration as defined in <span>[<a href="#RFC9000" class="xref">RFC9000</a>]</span>) would be sufficient is discussed in <a href="#implic" class="xref">Section 4</a>).<a href="#section-1.3-4.2" class="pilcrow">¶</a>
+</li>
+          <li class="normal" id="section-1.3-4.3">Traffic Splitting - using multiple validated paths simultaneously (this would almost certainly require an extension beyond connection migration as defined in <span>[<a href="#RFC9000" class="xref">RFC9000</a>]</span>).<a href="#section-1.3-4.3" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-1.3-5">"Traffic Steering" does not require any extension to <span>[<a href="#RFC9000" class="xref">RFC9000</a>]</span>, and is not discussed further in this document. The focus will be on "Traffic Switching" and "Traffic Splitting".<a href="#section-1.3-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="contrib">
+<section id="section-1.4">
+        <h3 id="name-contribution-and-discussion">
+<a href="#section-1.4" class="section-number selfRef">1.4. </a><a href="#name-contribution-and-discussion" class="section-name selfRef">Contribution and Discussion Venues for this draft.</a>
+        </h3>
+<p id="section-1.4-1">(Note to RFC Editor - if this document ever reaches you, please remove this section)<a href="#section-1.4-1" class="pilcrow">¶</a></p>
+<p id="section-1.4-2">This document is under development in the Github repository at https://github.com/SpencerDawkins/panrg-path-selection.<a href="#section-1.4-2" class="pilcrow">¶</a></p>
+<p id="section-1.4-3">Readers are invited to open issues and send pull requests with contributed text for this document, but since the document is intended to guide discussion for the Path Aware Networking Research group, substantial discussion of this document should take place on the PANRG mailing list (panrg@irtf.org). Mailing list subscription and archive details are at https://www.irtf.org/mailman/listinfo/panrg.<a href="#section-1.4-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="background">
+<section id="section-2">
+      <h2 id="name-background-for-this-documen">
+<a href="#section-2" class="section-number selfRef">2. </a><a href="#name-background-for-this-documen" class="section-name selfRef">Background for this document</a>
+      </h2>
+<p id="section-2-1">A number of individual draft proposals for "QUIC over multiple paths" have been submitted to the IETF QUIC and INTAREA working groups, dating back as far as 2017. The author thinks that the complete list is as follows (and reminders for proposals he missed are welcomed):<a href="#section-2-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-2-2.1">
+          <span>[<a href="#I-D.an-multipath-quic" class="xref">I-D.an-multipath-quic</a>]</span><a href="#section-2-2.1" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-2-2.2">
+          <span>[<a href="#I-D.an-multipath-quic-application-policy" class="xref">I-D.an-multipath-quic-application-policy</a>]</span><a href="#section-2-2.2" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-2-2.3">
+          <span>[<a href="#I-D.an-multipath-quic-traffic-distribution" class="xref">I-D.an-multipath-quic-traffic-distribution</a>]</span><a href="#section-2-2.3" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-2-2.4">
+          <span>[<a href="#I-D.chan-quic-owl" class="xref">I-D.chan-quic-owl</a>]</span><a href="#section-2-2.4" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-2-2.5">
+          <span>[<a href="#I-D.deconinck-quic-multipath" class="xref">I-D.deconinck-quic-multipath</a>]</span><a href="#section-2-2.5" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-2-2.6">
+          <span>[<a href="#I-D.deconinck-quic-multipath" class="xref">I-D.deconinck-quic-multipath</a>]</span>,<a href="#section-2-2.6" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-2-2.7">
+          <span>[<a href="#I-D.huitema-quic-mpath-req" class="xref">I-D.huitema-quic-mpath-req</a>]</span><a href="#section-2-2.7" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-2-2.8">
+          <span>[<a href="#I-D.huitema-quic-mpath-option" class="xref">I-D.huitema-quic-mpath-option</a>]</span>)<a href="#section-2-2.8" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-2-2.9">
+          <span>[<a href="#I-D.liu-multipath-quic" class="xref">I-D.liu-multipath-quic</a>]</span><a href="#section-2-2.9" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-2-2.10">
+          <span>[<a href="#I-D.piraux-intarea-quic-tunnel-session" class="xref">I-D.piraux-intarea-quic-tunnel-session</a>]</span><a href="#section-2-2.10" class="pilcrow">¶</a>
+</li>
+      </ul>
+<p id="section-2-3"><span>[<a href="#I-D.bonaventure-iccrg-schedulers" class="xref">I-D.bonaventure-iccrg-schedulers</a>]</span> has also been submitted to the Internet Congestion Control Research Group <span>[<a href="#ICCRG-charter" class="xref">ICCRG-charter</a>]</span> in the Internet Research Task Force. It contains specific proposals for implementing some multipath schedulers, and includes some discussion of path selection relevant to this document.<a href="#section-2-3" class="pilcrow">¶</a></p>
+<p id="section-2-4">One point of confusion in QUIC working group discussions was that the various proposals (also using Multipath TCP <span>[<a href="#RFC8684" class="xref">RFC8684</a>]</span>, so not all proposals were QUIC-specific) discussed in working group meetings and on the QUIC mailing list were from various proponents who weren't solving the same problem. This meant that no two of the use cases presented at the QUIC working group virtual interim on QUIC Multipath <span>[<a href="#QUIC-interim-20-10" class="xref">QUIC-interim-20-10</a>]</span> were relying on the same strategies.<a href="#section-2-4" class="pilcrow">¶</a></p>
+<p id="section-2-5">It seemed useful to collect the path selection strategies described in those proposals, to look for common elements, and to write them down in one place, to allow more focused discussion. <span>[<a href="#I-D.dawkins-quic-what-to-do-with-multipath" class="xref">I-D.dawkins-quic-what-to-do-with-multipath</a>]</span> was intended to summarize, at a high level, various proposals for the use of multipath capabilities in QUIC, both inside the IETF and outside the IETF, in order to identify elements that were common across proposals. This draft tries to describe the impact of these various strategies on potential QUIC Multipath extensions.<a href="#section-2-5" class="pilcrow">¶</a></p>
+<p id="section-2-6">One element that is certainly worth considering is whether the path selection strategies that have been proposed can be satisfied using a small number of "building block" strategies.<a href="#section-2-6" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="strategies">
+<section id="section-3">
+      <h2 id="name-overview-of-proposed-path-s">
+<a href="#section-3" class="section-number selfRef">3. </a><a href="#name-overview-of-proposed-path-s" class="section-name selfRef">Overview of Proposed Path Selection Strategies</a>
+      </h2>
+<p id="section-3-1">The following strategies were discussed at <span>[<a href="#QUIC-interim-20-10" class="xref">QUIC-interim-20-10</a>]</span>, and afterwards on the QUIC mailing list. These are summarized in this section, are described in more detail in <span>[<a href="#I-D.dawkins-quic-what-to-do-with-multipath" class="xref">I-D.dawkins-quic-what-to-do-with-multipath</a>]</span>, and are attributed to various proposals in that document.<a href="#section-3-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-3-2.1">Active-Standby - described in <a href="#act-stand" class="xref">Section 3.1</a><a href="#section-3-2.1" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-3-2.2">Latency Versus Bandwidth - described in <a href="#lat-band" class="xref">Section 3.2</a><a href="#section-3-2.2" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-3-2.3">Bandwidth Aggregation/Load Balancing - described in <a href="#load-bal" class="xref">Section 3.3</a><a href="#section-3-2.3" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-3-2.4">Minimum RTT Difference - described in <a href="#min-rtt" class="xref">Section 3.4</a><a href="#section-3-2.4" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-3-2.5">Round-Trip-Time Thresholds - described in <a href="#rtt-thresh" class="xref">Section 3.5</a><a href="#section-3-2.5" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-3-2.6">RTT Equivalence - described in <a href="#rtt-sam" class="xref">Section 3.6</a><a href="#section-3-2.6" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-3-2.7">Priority-based - described in <a href="#prior" class="xref">Section 3.7</a><a href="#section-3-2.7" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-3-2.8">Redundant - described in <a href="#redundant" class="xref">Section 3.8</a><a href="#section-3-2.8" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-3-2.9">Control Plane Versus Data Plane - described in <a href="#cp-dp" class="xref">Section 3.9</a><a href="#section-3-2.9" class="pilcrow">¶</a>
+</li>
+        <li class="normal" id="section-3-2.10">Combinations of Strategies - described in <a href="#combo" class="xref">Section 3.10</a><a href="#section-3-2.10" class="pilcrow">¶</a>
+</li>
+      </ul>
+<div id="act-stand">
+<section id="section-3.1">
+        <h3 id="name-active-standby">
+<a href="#section-3.1" class="section-number selfRef">3.1. </a><a href="#name-active-standby" class="section-name selfRef">Active-Standby</a>
+        </h3>
+<p id="section-3.1-1">The traffic associated with a specific flow will be sent via a specific path (the 'active path') and switched to another path (called 'standby path') when the active access is unavailable.<a href="#section-3.1-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="lat-band">
+<section id="section-3.2">
+        <h3 id="name-latency-versus-bandwidth">
+<a href="#section-3.2" class="section-number selfRef">3.2. </a><a href="#name-latency-versus-bandwidth" class="section-name selfRef">Latency Versus Bandwidth</a>
+        </h3>
+<p id="section-3.2-1">Some traffic might be sent over a network path with lower latency and other traffic might be sent over a different network path with higher bandwidth.<a href="#section-3.2-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="load-bal">
+<section id="section-3.3">
+        <h3 id="name-bandwidth-aggregation-load-">
+<a href="#section-3.3" class="section-number selfRef">3.3. </a><a href="#name-bandwidth-aggregation-load-" class="section-name selfRef">Bandwidth Aggregation/Load Balancing</a>
+        </h3>
+<p id="section-3.3-1">Traffic is sent using all available paths simultaneously, so that all available bandwidth is utilized, likely based on something like weighted round-robin path selection. This strategy is often used for bulk transfers.<a href="#section-3.3-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="min-rtt">
+<section id="section-3.4">
+        <h3 id="name-minimum-rtt-difference">
+<a href="#section-3.4" class="section-number selfRef">3.4. </a><a href="#name-minimum-rtt-difference" class="section-name selfRef">Minimum RTT Difference</a>
+        </h3>
+<p id="section-3.4-1">Traffic is sent over the path with the lowest smoothed RTT among all available paths, in order to minimize latency for latency-sensitive flows.<a href="#section-3.4-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="rtt-thresh">
+<section id="section-3.5">
+        <h3 id="name-round-trip-time-thresholds">
+<a href="#section-3.5" class="section-number selfRef">3.5. </a><a href="#name-round-trip-time-thresholds" class="section-name selfRef">Round-Trip-Time Thresholds</a>
+        </h3>
+<p id="section-3.5-1">Traffic is sent over the first path with a smoothed RTT that meets a certain threshold.<a href="#section-3.5-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="rtt-sam">
+<section id="section-3.6">
+        <h3 id="name-rtt-equivalence">
+<a href="#section-3.6" class="section-number selfRef">3.6. </a><a href="#name-rtt-equivalence" class="section-name selfRef">RTT Equivalence</a>
+        </h3>
+<p id="section-3.6-1">When multiple paths each have sufficiently similar smoothed RTTs, traffic is sent over all of these paths. This is similar to "Bandwidth Aggregation/Load Balancing", with the additional qualification that not all available paths are used for this traffic.<a href="#section-3.6-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="prior">
+<section id="section-3.7">
+        <h3 id="name-priority-based">
+<a href="#section-3.7" class="section-number selfRef">3.7. </a><a href="#name-priority-based" class="section-name selfRef">Priority-based</a>
+        </h3>
+<p id="section-3.7-1">Priorities are assigned to each path (often by association with network interfaces). Traffic is sent on a highest-priority path until it becomes congested, and then "overflows" onto a lower-priority path.<a href="#section-3.7-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="redundant">
+<section id="section-3.8">
+        <h3 id="name-redundant">
+<a href="#section-3.8" class="section-number selfRef">3.8. </a><a href="#name-redundant" class="section-name selfRef">Redundant</a>
+        </h3>
+<p id="section-3.8-1">Traffic is replicated over two or more paths. This strategy could be used continuously, but is more commonly used when measured network conditions indicate that redundant sending may be necessary to increase the likelihood that at least one copy of each packet will arrive at the receiver.<a href="#section-3.8-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="cp-dp">
+<section id="section-3.9">
+        <h3 id="name-control-plane-versus-data-p">
+<a href="#section-3.9" class="section-number selfRef">3.9. </a><a href="#name-control-plane-versus-data-p" class="section-name selfRef">Control Plane Versus Data Plane</a>
+        </h3>
+<p id="section-3.9-1">An application might stream media over one or more available paths (based on one of the other strategies named in this section), but might send ACK traffic or retransmission over a path specifically chosen for that purpose. This is more likely to be beneficial if the path characteristics differ significantly between available paths - for example, satellite uplink/downlink stations connected by both higher-bandwidth Low Earth Orbit satellite paths and lower-bandwidth cellular or landline paths.<a href="#section-3.9-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="combo">
+<section id="section-3.10">
+        <h3 id="name-combinations-of-strategies">
+<a href="#section-3.10" class="section-number selfRef">3.10. </a><a href="#name-combinations-of-strategies" class="section-name selfRef">Combinations of Strategies</a>
+        </h3>
+<p id="section-3.10-1">In addition to the strategies described above, it is also possible to combine these strategies. For example, a scheduler might use load-balancing over three paths, but when one of the paths becomes unavailable, the scheduler might switch to the two paths that are still available, in a way similar to Active-Standby. This is very much an example chosen at random - potentially, there are many combinations that could be useful.<a href="#section-3.10-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="implic">
+<section id="section-4">
+      <h2 id="name-implications-for-quic-multi">
+<a href="#section-4" class="section-number selfRef">4. </a><a href="#name-implications-for-quic-multi" class="section-name selfRef">Implications for QUIC Multipath</a>
+      </h2>
+<p id="section-4-1">This section summarizes potential implications for "Multipath QUIC" of path selection strategies described in <a href="#strategies" class="xref">Section 3</a>, dividing them between "Traffic Switching" (<a href="#single-active" class="xref">Section 4.1</a>) and "Traffic Splitting" (<a href="#mult-active" class="xref">Section 4.2</a>).<a href="#section-4-1" class="pilcrow">¶</a></p>
+<div id="single-active">
+<section id="section-4.1">
+        <h3 id="name-selecting-a-single-path-amo">
+<a href="#section-4.1" class="section-number selfRef">4.1. </a><a href="#name-selecting-a-single-path-amo" class="section-name selfRef">Selecting a Single Path Among Multiple Validated Paths ("Traffic Switching")</a>
+        </h3>
+<p id="section-4.1-1">If a sender using Active-Standby (described in <a href="#act-stand" class="xref">Section 3.1</a>) does not perform frequent path switching, it can likely be supported using connection migration as defined in <span>[<a href="#RFC9000" class="xref">RFC9000</a>]</span> without change.<a href="#section-4.1-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-4.1-2.1">The caveat here is that connection migration can include the also-implicit assumption that an endpoint can free up resources associated with the previously-active path. If connection migration happens often enough, the endpoint may spend considerable time "thrashing" between allocating resources and quickly freeing them. Of course, if a sender is frequently selecting a new path for connection migration, this probably degenerates into one of the other path selection strategies.<a href="#section-4.1-2.1" class="pilcrow">¶</a>
+</li>
+        </ul>
+<p id="section-4.1-3">Some path selection strategies could be supported by a mechanism as simple as the one proposed in <span>[<a href="#I-D.huitema-quic-mpath-option" class="xref">I-D.huitema-quic-mpath-option</a>]</span>, which replaces "the implicit signaling of path migration through data transmission, by means of a new PATH_OPTION frame" (this isn't intended to imply the proposal is simple, only the explicit signaling), if the receiver uses this option to notify the sender of the preferred path. For example, Minimum RTT Difference (described in <a href="#min-rtt" class="xref">Section 3.4</a>) and Round-Trip-Time Thresholds (described in <a href="#rtt-thresh" class="xref">Section 3.5</a>) likely fall into this category.<a href="#section-4.1-3" class="pilcrow">¶</a></p>
+<p id="section-4.1-4">Some path selection strategies are exploiting a relatively long-lived difference between paths - for example, Latency Versus Bandwidth (described in <a href="#lat-band" class="xref">Section 3.2</a>), Priority-based (described in <a href="#prior" class="xref">Section 3.7</a>), and Control Plane Versus Data Plane (described in <a href="#cp-dp" class="xref">Section 3.9</a>) may fall into this category. One might wonder why these senders would need to use a single "multipath connection", rather than multiple <span>[<a href="#RFC9000" class="xref">RFC9000</a>]</span> connections, for these cases, but if there is a reason to use a single multipath connection, a mechanism similar to the one proposed in <span>[<a href="#I-D.huitema-quic-mpath-option" class="xref">I-D.huitema-quic-mpath-option</a>]</span> could also be used in these cases.<a href="#section-4.1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="mult-active">
+<section id="section-4.2">
+        <h3 id="name-selecting-multiple-active-p">
+<a href="#section-4.2" class="section-number selfRef">4.2. </a><a href="#name-selecting-multiple-active-p" class="section-name selfRef">Selecting Multiple Active Paths ("Traffic Splitting")</a>
+        </h3>
+<p id="section-4.2-1">Some path selection strategies are treating more than one path as a set of active paths, whether the sender is performing "Traffic Splitting" (as defined in <a href="#min-term" class="xref">Section 1.3</a>)), as is the case for Bandwidth Aggregation/Load Balancing (described in <a href="#load-bal" class="xref">Section 3.3</a>) and RTT Equivalence (described in <a href="#rtt-sam" class="xref">Section 3.6</a>), or simply transmitting the same packet across multiple paths, as is the case for Redundant (described in <a href="#redundant" class="xref">Section 3.8</a>).<a href="#section-4.2-1" class="pilcrow">¶</a></p>
+<p id="section-4.2-2">For these cases, a more complex mechanism is likely required.<a href="#section-4.2-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="arbitrary-combinations">
+<section id="section-4.3">
+        <h3 id="name-arbitrary-combinations">
+<a href="#section-4.3" class="section-number selfRef">4.3. </a><a href="#name-arbitrary-combinations" class="section-name selfRef">Arbitrary Combinations</a>
+        </h3>
+<p id="section-4.3-1">Because it is simple enough to imagine various combinations of strategies (as described in <a href="#combo" class="xref">Section 3.10</a>), it seems important to understand what basic building blocks are required in order to support the strategies that seem common across a variety of use cases, because interactions between strategies may have significant implications for QUIC Multipath that might not arise when considering strategies in isolation.<a href="#section-4.3-1" class="pilcrow">¶</a></p>
+<p id="section-4.3-2">This seems especially important because existing proposals for QUIC Multipath don't use the same vocabulary to describe path selection strategies, so implementations may not behave in the same way, even if they are each using a strategy that seems to be common.<a href="#section-4.3-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="next-steps">
+<section id="section-5">
+      <h2 id="name-next-steps">
+<a href="#section-5" class="section-number selfRef">5. </a><a href="#name-next-steps" class="section-name selfRef">Next Steps</a>
+      </h2>
+<p id="section-5-1">If this discussion is useful, it may also be useful to take the next step, and identify potential building blocks that can be used to construct the path selection strategies described in <a href="#single-active" class="xref">Section 4.1</a> and <a href="#mult-active" class="xref">Section 4.2</a>.<a href="#section-5-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="iana-considerations">
+<section id="section-6">
+      <h2 id="name-iana-considerations">
+<a href="#section-6" class="section-number selfRef">6. </a><a href="#name-iana-considerations" class="section-name selfRef">IANA Considerations</a>
+      </h2>
+<p id="section-6-1">This document does not make any request to IANA.<a href="#section-6-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="security-considerations">
+<section id="section-7">
+      <h2 id="name-security-considerations">
+<a href="#section-7" class="section-number selfRef">7. </a><a href="#name-security-considerations" class="section-name selfRef">Security Considerations</a>
+      </h2>
+<p id="section-7-1">QUIC-specific security considerations are discussed in Section 21 of <span>[<a href="#RFC9000" class="xref">RFC9000</a>]</span>.<a href="#section-7-1" class="pilcrow">¶</a></p>
+<p id="section-7-2">Section 6 of <span>[<a href="#I-D.ietf-quic-datagram" class="xref">I-D.ietf-quic-datagram</a>]</span> discusses security considerations specific to the use of the Unreliable Datagram Extension to QUIC.<a href="#section-7-2" class="pilcrow">¶</a></p>
+<p id="section-7-3">Some "Multipath QUIC"-specific security considerations can be found in the corresponding section of <span>[<a href="#I-D.deconinck-quic-multipath" class="xref">I-D.deconinck-quic-multipath</a>]</span>.<a href="#section-7-3" class="pilcrow">¶</a></p>
+<p id="section-7-4">Having said that, it may be best to repeat the security considerations section from <span>[<a href="#I-D.huitema-quic-mpath-option" class="xref">I-D.huitema-quic-mpath-option</a>]</span>: "TBD.  There are probably ways to abuse this.".<a href="#section-7-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="acknowledgments">
+<section id="section-8">
+      <h2 id="name-acknowledgments">
+<a href="#name-acknowledgments" class="section-name selfRef">Acknowledgments</a>
+      </h2>
+<p id="section-8-1">Your name could appear here. Please comment and contribute, as per <a href="#contrib" class="xref">Section 1.4</a>.<a href="#section-8-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<section id="section-9">
+      <h2 id="name-informative-references">
+<a href="#name-informative-references" class="section-name selfRef">Informative References</a>
+      </h2>
+<dl class="references">
+<dt id="I-D.an-multipath-quic">[I-D.an-multipath-quic]</dt>
+      <dd>
+<span class="refAuthor">An, Q.</span>, <span class="refAuthor">Liu, Y.</span>, <span class="refAuthor">Ma, Y.</span>, and <span class="refAuthor">Z. Li</span>, <span class="refTitle">"Multipath Extension for QUIC"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-an-multipath-quic-00</span>, <time datetime="2020-10-22" class="refDate">22 October 2020</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-an-multipath-quic-00">https://datatracker.ietf.org/doc/html/draft-an-multipath-quic-00</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.an-multipath-quic-application-policy">[I-D.an-multipath-quic-application-policy]</dt>
+      <dd>
+<span class="refAuthor">An, Q.</span>, <span class="refAuthor">Li, Z.</span>, and <span class="refAuthor">Y. Liu</span>, <span class="refTitle">"Enabling application policy-awareness in Multipath QUIC"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-an-multipath-quic-application-policy-00</span>, <time datetime="2020-07-06" class="refDate">6 July 2020</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-an-multipath-quic-application-policy-00">https://datatracker.ietf.org/doc/html/draft-an-multipath-quic-application-policy-00</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.an-multipath-quic-traffic-distribution">[I-D.an-multipath-quic-traffic-distribution]</dt>
+      <dd>
+<span class="refAuthor">An, Q.</span>, <span class="refAuthor">Liu, D.</span>, and <span class="refAuthor">Y. Liu</span>, <span class="refTitle">"Key Components for Multipath QUIC Traffic Distribution"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-an-multipath-quic-traffic-distribution-00</span>, <time datetime="2020-03-05" class="refDate">5 March 2020</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-an-multipath-quic-traffic-distribution-00">https://datatracker.ietf.org/doc/html/draft-an-multipath-quic-traffic-distribution-00</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.bonaventure-iccrg-schedulers">[I-D.bonaventure-iccrg-schedulers]</dt>
+      <dd>
+<span class="refAuthor">Bonaventure, O.</span>, <span class="refAuthor">Piraux, M.</span>, <span class="refAuthor">Coninck, Q. D.</span>, <span class="refAuthor">Baerts, M.</span>, <span class="refAuthor">Paasch, C.</span>, and <span class="refAuthor">M. Amend</span>, <span class="refTitle">"Multipath schedulers"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-bonaventure-iccrg-schedulers-01</span>, <time datetime="2020-09-09" class="refDate">9 September 2020</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-bonaventure-iccrg-schedulers-01">https://datatracker.ietf.org/doc/html/draft-bonaventure-iccrg-schedulers-01</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.chan-quic-owl">[I-D.chan-quic-owl]</dt>
+      <dd>
+<span class="refAuthor">Chan, H. A.</span>, <span class="refAuthor">Wei, A.</span>, <span class="refAuthor">Song, F.</span>, and <span class="refAuthor">H. Zhang</span>, <span class="refTitle">"One Way Latency Considerations for Multipath in QUIC"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-chan-quic-owl-01</span>, <time datetime="2017-03-13" class="refDate">13 March 2017</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-chan-quic-owl-01">https://datatracker.ietf.org/doc/html/draft-chan-quic-owl-01</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.dawkins-quic-what-to-do-with-multipath">[I-D.dawkins-quic-what-to-do-with-multipath]</dt>
+      <dd>
+<span class="refAuthor">Dawkins, S.</span>, <span class="refTitle">"What To Do With Multiple Active Paths in QUIC"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-dawkins-quic-what-to-do-with-multipath-03</span>, <time datetime="2021-01-06" class="refDate">6 January 2021</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-dawkins-quic-what-to-do-with-multipath-03">https://datatracker.ietf.org/doc/html/draft-dawkins-quic-what-to-do-with-multipath-03</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.deconinck-quic-multipath">[I-D.deconinck-quic-multipath]</dt>
+      <dd>
+<span class="refAuthor">Coninck, Q. D.</span> and <span class="refAuthor">O. Bonaventure</span>, <span class="refTitle">"Multipath Extensions for QUIC (MP-QUIC)"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-deconinck-quic-multipath-07</span>, <time datetime="2021-05-03" class="refDate">3 May 2021</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-deconinck-quic-multipath-07">https://datatracker.ietf.org/doc/html/draft-deconinck-quic-multipath-07</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.huitema-quic-mpath-option">[I-D.huitema-quic-mpath-option]</dt>
+      <dd>
+<span class="refAuthor">Huitema, C.</span>, <span class="refTitle">"QUIC Multipath Negotiation Option"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-huitema-quic-mpath-option-00</span>, <time datetime="2020-10-20" class="refDate">20 October 2020</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-huitema-quic-mpath-option-00">https://datatracker.ietf.org/doc/html/draft-huitema-quic-mpath-option-00</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.huitema-quic-mpath-req">[I-D.huitema-quic-mpath-req]</dt>
+      <dd>
+<span class="refAuthor">Huitema, C.</span>, <span class="refTitle">"QUIC Multipath Requirements"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-huitema-quic-mpath-req-01</span>, <time datetime="2018-01-07" class="refDate">7 January 2018</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-huitema-quic-mpath-req-01">https://datatracker.ietf.org/doc/html/draft-huitema-quic-mpath-req-01</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.ietf-quic-datagram">[I-D.ietf-quic-datagram]</dt>
+      <dd>
+<span class="refAuthor">Pauly, T.</span>, <span class="refAuthor">Kinnear, E.</span>, and <span class="refAuthor">D. Schinazi</span>, <span class="refTitle">"An Unreliable Datagram Extension to QUIC"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-ietf-quic-datagram-03</span>, <time datetime="2021-07-12" class="refDate">12 July 2021</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-ietf-quic-datagram-03">https://datatracker.ietf.org/doc/html/draft-ietf-quic-datagram-03</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.liu-multipath-quic">[I-D.liu-multipath-quic]</dt>
+      <dd>
+<span class="refAuthor">Liu, Y.</span>, <span class="refAuthor">Ma, Y.</span>, <span class="refAuthor">Huitema, C.</span>, <span class="refAuthor">An, Q.</span>, and <span class="refAuthor">Z. Li</span>, <span class="refTitle">"Multipath Extension for QUIC"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-liu-multipath-quic-03</span>, <time datetime="2021-03-07" class="refDate">7 March 2021</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-liu-multipath-quic-03">https://datatracker.ietf.org/doc/html/draft-liu-multipath-quic-03</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.piraux-intarea-quic-tunnel-session">[I-D.piraux-intarea-quic-tunnel-session]</dt>
+      <dd>
+<span class="refAuthor">Piraux, M.</span>, <span class="refAuthor">Bonaventure, O.</span>, and <span class="refAuthor">A. Masputra</span>, <span class="refTitle">"Session mode for multiple QUIC Tunnels"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-piraux-intarea-quic-tunnel-session-00</span>, <time datetime="2020-11-02" class="refDate">2 November 2020</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-piraux-intarea-quic-tunnel-session-00">https://datatracker.ietf.org/doc/html/draft-piraux-intarea-quic-tunnel-session-00</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="ICCRG-charter">[ICCRG-charter]</dt>
+      <dd>
+<span class="refTitle">"IRTF Internet Congestion Control Research Group Charter"</span>, <span>n.d.</span>, <span>&lt;<a href="https://datatracker.ietf.org/rg/iccrg/about/">https://datatracker.ietf.org/rg/iccrg/about/</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="QUIC-charter">[QUIC-charter]</dt>
+      <dd>
+<span class="refTitle">"IETF QUIC Working Group Charter"</span>, <span>n.d.</span>, <span>&lt;<a href="https://datatracker.ietf.org/wg/quic/about/">https://datatracker.ietf.org/wg/quic/about/</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="QUIC-interim-20-10">[QUIC-interim-20-10]</dt>
+      <dd>
+<span class="refTitle">"IETF QUIC Working Group Virtual Interim Meeting - October 2020"</span>, <time datetime="2020-10" class="refDate">October 2020</time>, <span>&lt;<a href="https://github.com/quicwg/wg-materials/tree/master/interim-20-10">https://github.com/quicwg/wg-materials/tree/master/interim-20-10</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8684">[RFC8684]</dt>
+      <dd>
+<span class="refAuthor">Ford, A.</span>, <span class="refAuthor">Raiciu, C.</span>, <span class="refAuthor">Handley, M.</span>, <span class="refAuthor">Bonaventure, O.</span>, and <span class="refAuthor">C. Paasch</span>, <span class="refTitle">"TCP Extensions for Multipath Operation with Multiple Addresses"</span>, <span class="seriesInfo">RFC 8684</span>, <span class="seriesInfo">DOI 10.17487/RFC8684</span>, <time datetime="2020-03" class="refDate">March 2020</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/rfc8684">https://datatracker.ietf.org/doc/html/rfc8684</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9000">[RFC9000]</dt>
+      <dd>
+<span class="refAuthor">Iyengar, J., Ed.</span> and <span class="refAuthor">M. Thomson, Ed.</span>, <span class="refTitle">"QUIC: A UDP-Based Multiplexed and Secure Transport"</span>, <span class="seriesInfo">RFC 9000</span>, <span class="seriesInfo">DOI 10.17487/RFC9000</span>, <time datetime="2021-05" class="refDate">May 2021</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/rfc9000">https://datatracker.ietf.org/doc/html/rfc9000</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="S2-2104599">[S2-2104599]</dt>
+      <dd>
+<span class="refAuthor">Lenovo, Motorola Mobility, .</span>, <span class="refTitle">"Study on Access Traffic Steering, Switching and Splitting support in the 5G system architecture; Phase 3"</span>, <time datetime="2021" class="refDate">2021</time>, <span>&lt;<a href="https://www.3gpp.org/ftp/tsg_sa/WG2_Arch/TSGS2_145E_Electronic_2021-05/Docs/S2-2104599.zip">https://www.3gpp.org/ftp/tsg_sa/WG2_Arch/TSGS2_145E_Electronic_2021-05/Docs/S2-2104599.zip</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="TR23700-93">[TR23700-93]</dt>
+      <dd>
+<span class="refAuthor">3GPP (3rd Generation Partnership Project), .</span>, <span class="refTitle">"Technical Specification Group Services and System Aspects; Study on access traffic steering, switch and splitting support in the 5G System (5GS) architecture; Phase 2 (Release 17)"</span>, <time datetime="2021" class="refDate">2021</time>, <span>&lt;<a href="https://www.3gpp.org/ftp/Specs/archive/23_series/23.700-93/">https://www.3gpp.org/ftp/Specs/archive/23_series/23.700-93/</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="TS23501">[TS23501]</dt>
+    <dd>
+<span class="refAuthor">3GPP (3rd Generation Partnership Project), .</span>, <span class="refTitle">"Technical Specification Group Services and System Aspects; System Architecture for the 5G System; Stage 2 (Release 16)"</span>, <time datetime="2019" class="refDate">2019</time>, <span>&lt;<a href="https://www.3gpp.org/ftp/Specs/archive/23_series/23.501/">https://www.3gpp.org/ftp/Specs/archive/23_series/23.501/</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+</dl>
+</section>
+<div id="authors-addresses">
+<section id="appendix-A">
+      <h2 id="name-authors-address">
+<a href="#name-authors-address" class="section-name selfRef">Author's Address</a>
+      </h2>
+<address class="vcard">
+        <div dir="auto" class="left"><span class="fn nameRole">Spencer Dawkins</span></div>
+<div dir="auto" class="left"><span class="org">Tencent America LLC</span></div>
+<div class="email">
+<span>Email:</span>
+<a href="mailto:spencerdawkins.ietf@gmail.com" class="email">spencerdawkins.ietf@gmail.com</a>
+</div>
+</address>
+</section>
+</div>
+<script>const toc = document.getElementById("toc");
+toc.querySelector("h2").addEventListener("click", e => {
+  toc.classList.toggle("active");
+});
+toc.querySelector("nav").addEventListener("click", e => {
+  toc.classList.remove("active");
+});
+</script>
+</body>
+</html>
