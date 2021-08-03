@@ -1,0 +1,7 @@
+<note title="Discussion Venues" removeInRFC="true">
+<t>Discussion of this document takes place on the
+    Path Aware Networking RG Research Group mailing list (panrg@irtf.org),
+    which is archived at <eref target="https://www.ietf.org/mail-archive/web/panrg/"/>.</t>
+<t>Source for this draft and an issue tracker can be found at
+    <eref target="https://github.com/SpencerDawkins/panrg-path-selection"/>.</t>
+</note>
